@@ -1,0 +1,261 @@
+select *
+from CovidDeaths
+order by 3,4
+
+select *
+from CovidVaccination
+order by 3,4
+
+-- Data Selection 
+
+select Location, Date, total_cases, new_cases, total_deaths, population
+from CovidDeaths
+order by 1,2
+
+--Total Cases vs Total Deaths
+
+select Location, Date, total_cases, new_cases, total_deaths, population
+from CovidDeaths 
+order by 3,4
+
+ 
+-- error // Operand data type nvarchar is invalid for divide operator.
+
+select Location, Date, total_cases, total_deaths, (total_deaths/total_cases)*100 as DeathPercentage
+from CovidDeaths
+order by 1,2
+
+
+
+--Total Cases vs Total Deaths
+
+
+Select Location, Date, total_cases, total_deaths, CAST(total_deaths AS float) / CAST(total_cases AS float)*100 AS PERCENTDEATH
+from CovidDeaths
+order by 1,2
+
+Select Location, Date, total_cases, total_deaths, CAST(total_deaths AS float) / CAST(total_cases AS float)*100 AS PERCENTDEATH
+from CovidDeaths
+where location like '%ppines%'
+order by 1,2
+
+
+
+-- TOTAL CASES VS POPULATION
+ % Population who got Covid
+
+Select Location, Date, Max(total_cases), population, CAST(total_cases AS float) / CAST(population AS float)*100 AS Contrated
+from CovidDeaths
+where location like '%ppines%'
+order by 1,2
+
+-- Countries with Highest Infection Rate compared Population
+
+
+Select location, population,  Max(total_cases) as Highest_Infection_Count, Max(CAST(total_cases AS float) / CAST(population AS float))*100 AS Percent_of_Population_infected
+from CovidDeaths
+where location like '%state%'
+GROUP BY Location, Population, total_cases	
+ORDER BY Percent_of_Population_infected desc
+
+ Countries with Highest Death count per population
+
+Select location, Max(cast(total_deaths as int)) as Total_Death_count
+from Coviddeaths
+where continent is not null
+Group by location
+Order by Total_Death_count desc
+
+
+-- By Continent
+
+Select location, Max(cast(total_deaths as int)) as Total_Death_count
+from Coviddeaths
+where continent is null
+Group by location
+Order by Total_Death_count desc
+-- By Continent with High Death Count
+
+Select continent, Max(cast(total_deaths as int)) as Total_Death_count
+from Coviddeaths
+where continent is not null
+Group by continent
+Order by Total_Death_count desc
+
+-- GLOBAL NUMBERS
+----Problem
+----select Date, new_cases, new_deaths, (new_deaths/new_cases)*100 As DeathPercentage
+----from CovidDeaths
+----where continent is not null
+----Group by Date, new_cases, new_deaths
+----order by 1,2
+
+----Msg 8134, Level 16, State 1, Line 91
+----Divide by zero error encountered.
+
+----Completion time: 2023-03-21T09:53:21.1131852+08:00
+ 
+solution
+select Date, new_cases, new_deaths, (new_deaths/nullif (new_cases,0))*100 As DeathPercentage
+from CovidDeaths
+where continent is not null
+Group by Date, new_cases, new_deaths
+order by 1,2
+
+
+
+select Date, new_cases, new_deaths, (new_deaths/nullif (new_cases,0))*100 As DeathPercentage
+from CovidDeaths
+where continent is not null
+Group by Date, new_cases, new_deaths
+order by 1,2
+
+
+ -- Total Population vs Vaccination
+----Problem
+----select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+----	sum(cast(vac.new_vaccinations as int)) Over (Partition by dea.location)
+----from CovidDeaths dea
+----join CovidVaccination vac
+----	on dea.location = vac.location
+----	and dea.date = vac.date
+----where dea.continent is not null
+----order by 2,3
+
+----Msg 8115, Level 16, State 2, Line 121
+----Arithmetic overflow error converting expression to data type int.
+----Warning: Null value is eliminated by an aggregate or other SET operation.
+
+----Completion time: 2023-03-21T14:47:05.6301374+08:00
+
+--Solution
+--BIGINT
+opt CAST to Convert
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+	sum(convert( bigint,vac.new_vaccinations)) Over (Partition by dea.location)
+from CovidDeaths dea
+join CovidVaccination vac
+	on dea.location = vac.location
+	and dea.date = vac.date
+where dea.continent is not null
+order by 2,3
+
+
+
+--rolling count
+ --you cannot use a column that was just created (this case the RollingPeopleVaccinated). Need to create CTE or Temp table
+ --to know how much of the population has been vaccinated
+
+ USING CTE
+ 
+WITH PopvsVac(Continent, Location, Date, Population, New_vaccinations, RollingPeopleVaccinated)
+as
+(
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+	sum(convert( bigint,vac.new_vaccinations)) Over (Partition by dea.location order by dea.location, dea.date) as RollingPeopleVaccinated
+	,RollingPeopleVaccinated/population)*100
+from CovidDeaths dea
+join CovidVaccination vac
+	on dea.location = vac.location
+	and dea.date = vac.date
+where dea.continent is not null
+)
+Select*, (RollingPeopleVaccinated/Population)*100
+From PopvsVac
+
+  ----USING TEMP TABLE
+  
+Drop table if existS #PercentPopulationVaccinated
+CREATE TABLE #PercentPopulationVaccinated
+(
+continent nvarchar(255),
+Location nvarchar(255),
+Date datetime,
+Population numeric,
+new_vaccinations numeric,
+RollingPeopleVaccinated numeric
+)
+
+
+INSERT into #PercentPopulationVaccinated
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+	sum(convert(bigint,vac.new_vaccinations)) Over (Partition by dea.location order by dea.location, dea.date) as RollingPeopleVaccinated
+from CovidDeaths dea
+join CovidVaccination vac
+	on dea.location = vac.location
+	and dea.date = vac.date
+where dea.continent is not null
+
+Select*, (RollingPeopleVaccinated/Population)*100
+From #PercentPopulationVaccinat
+
+
+ --PROBLEM
+ Column name or number of supplied values does not match table definition. 
+ QUERY
+Drop table if existS #PercentPopulationVaccinated 
+CREATE TABLE #PercentPopulationVaccinated
+(
+continent nvarchar(255),
+Location nvarchar(255),
+Date datetime,
+Population numeric,
+new_vaccinations numeric
+)
+
+
+INSERT INTO #PercentPopulationVaccinated
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+	sum(convert( bigint,vac.new_vaccinations)) Over (Partition by dea.location order by dea.location, dea.date) as RollingPeopleVaccinated
+	RollingPeopleVaccinated/population)*100
+from CovidDeaths dea
+join CovidVaccination vac
+	on dea.location = vac.location
+	and dea.date = vac.date
+where dea.continent is not null
+
+Select*, (RollingPeopleVaccinated/Population)*100
+From #PercentPopulationVaccinated
+
+
+ --SOLUTION
+Drop table if existS #PercentPopulationVaccinated
+CREATE TABLE #PercentPopulationVaccinated
+(
+continent nvarchar(255),
+Location nvarchar(255),
+Date datetime,
+Population numeric,
+new_vaccinations numeric,
+RollingPeopleVaccinated numeric
+)
+
+
+INSERT into #PercentPopulationVaccinated
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+	sum(convert(bigint,vac.new_vaccinations)) Over (Partition by dea.location order by dea.location, dea.date) as RollingPeopleVaccinated
+from CovidDeaths dea
+join CovidVaccination vac
+	on dea.location = vac.location
+	and dea.date = vac.date
+where dea.continent is not null
+
+Select*, (RollingPeopleVaccinated/Population)*100
+From #PercentPopulationVaccinated
+
+
+
+ --View to store data for viz
+
+Create View PercentPopulationVaccinated as
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+	sum(convert(bigint,vac.new_vaccinations)) Over (Partition by dea.location order by dea.location, dea.date) as RollingPeopleVaccinated
+from CovidDeaths dea
+join CovidVaccination vac
+	on dea.location = vac.location
+	and dea.date = vac.date
+where dea.continent is not null
+
+
+
+
